@@ -1,6 +1,6 @@
 .SUFFIXES:.o .cpp
 CC=g++
-SRCS=WebServer.cpp
+SRCS=webserver.cpp
 OBJS=$(SRCS:.cpp=.o)
 EXEC=main
 start: $(OBJS)
