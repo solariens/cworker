@@ -126,6 +126,11 @@ void WebServer::setServerFd() {
 		std::cout << "socket option set failed" << std::endl;
 		exit(0);
 	}
+	
+	/*if (setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int)) == -1) {
+		std::cout << "socket set tcp nodelay failed" << std::endl;
+		exit(0);
+	}*/
 
 	struct sockaddr_in server_addr;
 	memset(&server_addr, 0, sizeof(server_addr));
