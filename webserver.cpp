@@ -123,7 +123,7 @@ void WebServer::setServerFd() {
 	}
 	if (setsockopt(serverfd, SOL_SOCKET, SO_REUSEADDR, 1, sizeof(int)) == -1) {
 		std::cout << "socket option set failed" << std::endl;
-		exit;
+		exit(0);
 	}
 
 	struct sockaddr_in server_addr;
