@@ -2,6 +2,7 @@
 #include <string>
 #include <set>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -38,6 +39,18 @@ void WebServer::setDeamon() {
 		chdir("/");
 		umask(0);
 	}
+}
+
+void WebServer::setNonblock() {
+	int flags;
+	if ((flags = fcntl(serverfd, F_GETFL)) == -1) {
+		std::cout << "get serverfd flags failed" << std::endl;
+		exit(0);
+	}
+	flags |= O_NONBLOCK;
+	if (fcntl(serverfd, F_SETFL, flags) == -1) {
+		std::cout << "set serverfd flags failed" << std::endl;
+	}	
 }
 
 void WebServer::setSignal() {
@@ -108,6 +121,10 @@ void WebServer::setServerFd() {
 		std::cout << "socket create failed, please try again" << std::endl;
 		exit(0);
 	}
+	if (setsockopt(serverfd, SOL_SOCKET, SO_REUSEADDR, 1, sizeof(int)) == -1) {
+		std::cout << "socket option set failed" << std::endl;
+		exit;
+	}
 
 	struct sockaddr_in server_addr;
 	memset(&server_addr, 0, sizeof(server_addr));
@@ -123,6 +140,7 @@ void WebServer::setServerFd() {
 		std::cout << "socket listen failed, please try again" << std::endl;
 		exit(0);
 	}
+	setNonblock();
 }
 
 int main(int argc, char *argv[]) {

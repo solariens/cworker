@@ -19,6 +19,7 @@ private:
 	void setDeamon();
 	static void signalHandler(int);
 	void setWorkerProcess(int);
+	void setNonblock();
 public:
 	WebServer();
 	void runAll();
