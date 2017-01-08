@@ -121,7 +121,8 @@ void WebServer::setServerFd() {
 		std::cout << "socket create failed, please try again" << std::endl;
 		exit(0);
 	}
-	if (setsockopt(serverfd, SOL_SOCKET, SO_REUSEADDR, 1, sizeof(int)) == -1) {
+	int flag = 1;
+	if (setsockopt(serverfd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(int)) == -1) {
 		std::cout << "socket option set failed" << std::endl;
 		exit(0);
 	}
