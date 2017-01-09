@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <unistd.h>
+#include <netinet/tcp.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -130,10 +131,10 @@ void WebServer::setServerFd() {
 		exit(0);
 	}
 	
-	/*if (setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int)) == -1) {
+	if (setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int)) == -1) {
 		std::cout << "socket set tcp nodelay failed" << std::endl;
 		exit(0);
-	}*/
+	}
 
 	struct sockaddr_in server_addr;
 	memset(&server_addr, 0, sizeof(server_addr));
