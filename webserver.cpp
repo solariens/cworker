@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <unistd.h>
+#include <event.h>
 #include <netinet/tcp.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -82,8 +83,48 @@ void WebServer::forkWorker() {
 	}	
 }
 
+void WebServer::onAccept(int fd, short event, void *arg) {
+    struct event_base *base = (struct event_base *)arg;
+    struct sockaddr_in clientaddr;
+    memset(&clientaddr, 0, sizeof(clientaddr));
+    socklen_t len = sizeof(clientaddr);
+    int clientfd = accept(fd, (struct sockaddr *)&clientaddr, &len);
+    if (clientfd < 0) {
+        std::cout << "accept failed" << std::endl;
+        return;
+    }
+    struct event *read_ev = new struct event();
+    event_set(read_ev, clientfd, EV_READ|EV_PERSIST, WebServer::onRead, read_ev);
+    event_base_set(base, read_ev);
+    event_add(read_ev, NULL);
+}
+
+void WebServer::onRead(int fd, short event, void *arg) {
+    struct event *read_ev = (struct event *)arg;
+    char *buffer = new char[1024];
+    memset(buffer, 0, sizeof(buffer));
+    int size = 0;
+    while (true) {
+        size = recv(fd, buffer+size, sizeof(buffer) - size, 0);
+        if (size <= 0) {
+            break;
+        }
+    }
+    std::cout << buffer << std::endl;
+    event_del(read_ev);
+    delete read_ev;
+    delete [] buffer;
+    close(fd);
+    return;
+}
+
 void WebServer::runWorker() {
-	std::cout << serverfd << std::endl;
+    struct event_base *base = event_base_new();
+    struct event *listen_ev = new struct event();
+    event_set(listen_ev, serverfd, EV_READ|EV_PERSIST, WebServer::onAccept, base);
+    event_base_set(base, listen_ev);
+    event_add(listen_ev, NULL);
+    event_base_dispatch(base);
 }
 
 void WebServer::monitorWorker() {
@@ -154,7 +195,6 @@ void WebServer::setServerFd() {
 }
 
 int main(int argc, char *argv[]) {
-	std::cout << "hello world!" << std::endl;
 	WebServer webserver;
 	webserver.runAll();
 	return 0;

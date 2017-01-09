@@ -20,6 +20,8 @@ private:
 	static void signalHandler(int);
 	void setWorkerProcess(int);
 	void setNonblock();
+    static void onAccept(int fd, short event, void *arg);
+    static void onRead(int fd, short event, void *arg);
 public:
 	WebServer();
 	void runAll();

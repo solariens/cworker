@@ -4,7 +4,7 @@ SRCS=webserver.cpp
 OBJS=$(SRCS:.cpp=.o)
 EXEC=main
 start: $(OBJS)
-	$(CC) -o $(EXEC) $(OBJS)
+	$(CC) -o $(EXEC) $(OBJS) -levent
 	@echo '---OK----'
 .cpp.o:
 	$(CC) -o $@ -c $<
