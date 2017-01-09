@@ -1,13 +1,15 @@
 #include <iostream>
 #include <string>
 #include <set>
+#include <cstring>
+#include <cstdlib>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <sys/wait.h>
-#include "WebServer.h"
+#include "webserver.h"
 
 WebServer::WebServer() {
 	masterPid = 0;
@@ -50,6 +52,7 @@ void WebServer::setNonblock() {
 	flags |= O_NONBLOCK;
 	if (fcntl(serverfd, F_SETFL, flags) == -1) {
 		std::cout << "set serverfd flags failed" << std::endl;
+		exit(0);
 	}	
 }
 
