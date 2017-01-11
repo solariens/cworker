@@ -4,7 +4,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <unistd.h>
-#include <event.h>
+#include <event2/event.h>
 #include <netinet/tcp.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -25,9 +25,9 @@ WebServer::~WebServer() {
 
 void WebServer::runAll() {
 	setServerFd();
-	setDeamon();
+	//setDeamon();
 	setMasterPid();
-	setSignal();
+	//setSignal();
 	forkWorker();
 	monitorWorker();
 }
@@ -45,14 +45,14 @@ void WebServer::setDeamon() {
 	}
 }
 
-void WebServer::setNonblock() {
+void WebServer::setNonblock(int fd) {
 	int flags;
-	if ((flags = fcntl(serverfd, F_GETFL)) == -1) {
+	if ((flags = fcntl(fd, F_GETFL)) == -1) {
 		std::cout << "get serverfd flags failed" << std::endl;
 		exit(0);
 	}
 	flags |= O_NONBLOCK;
-	if (fcntl(serverfd, F_SETFL, flags) == -1) {
+	if (fcntl(fd, F_SETFL, flags) == -1) {
 		std::cout << "set serverfd flags failed" << std::endl;
 		exit(0);
 	}	
@@ -93,36 +93,71 @@ void WebServer::onAccept(int fd, short event, void *arg) {
         std::cout << "accept failed" << std::endl;
         return;
     }
-    struct event *read_ev = new struct event();
-    event_set(read_ev, clientfd, EV_READ|EV_PERSIST, WebServer::onRead, read_ev);
-    event_base_set(base, read_ev);
-    event_add(read_ev, NULL);
+    setNonblock(clientfd);
+    struct event_state *state = allocateEventState(base, clientfd);
+    event_add(state->read_ev, NULL);
+}
+
+struct event_state *WebServer::allocateEventState(struct event_base *base, int fd) {
+    struct event_state *state = new struct event_state();
+    if (!state) {
+        return NULL;
+    }
+    state->read_ev = event_new(base, fd, EV_READ|EV_PERSIST, WebServer::onRead, state);
+    if (!state->read_ev) {
+        delete state;
+        return NULL;
+    }
+    state->write_ev = event_new(base, fd, EV_WRITE, WebServer::onWrite, state);
+    if (!state->write_ev) {
+        event_free(state->read_ev);
+        delete state;
+        return NULL;
+    }
+    return state;
+}
+
+void WebServer::deleteEventState(struct event_state *state){
+    event_del(state->read_ev);
+    event_free(state->read_ev);
+    event_free(state->write_ev);
+    delete state;
+}
+
+void WebServer::onWrite(int fd, short event, void *arg) {
+    struct event_state *state = (struct event_state *)arg;
+    send(fd, "hello world!", strlen("hello world!"), 0);
+    delete state;
+    close(fd);
 }
 
 void WebServer::onRead(int fd, short event, void *arg) {
-    struct event *read_ev = (struct event *)arg;
-    char *buffer = new char[1024];
-    memset(buffer, 0, sizeof(buffer));
+    struct event_state * state = (struct event_state *)arg;
     int size = 0;
-    while (true) {
-        size = recv(fd, buffer+size, sizeof(buffer) - size, 0);
+    char buffer[65535];
+    memset(buffer, 0, sizeof(buffer));
+    int datasize = 0;
+    while (1) {
+        char *tmp = buffer;
+        size = recv(fd, tmp, 256, 0);
         if (size <= 0) {
             break;
         }
+        datasize += size;
+        tmp += size;
+        std::cout << datasize << std::endl;
+        if (buffer[datasize - 1] == ' ') {
+            std::cout << buffer << std::endl;
+            event_add(state->write_ev, NULL);
+            memset(buffer, 0, sizeof(buffer));
+        }
     }
-    std::cout << buffer << std::endl;
-    event_del(read_ev);
-    delete read_ev;
-    delete [] buffer;
-    close(fd);
     return;
 }
 
 void WebServer::runWorker() {
     struct event_base *base = event_base_new();
-    struct event *listen_ev = new struct event();
-    event_set(listen_ev, serverfd, EV_READ|EV_PERSIST, WebServer::onAccept, base);
-    event_base_set(base, listen_ev);
+    struct event *listen_ev = event_new(base, serverfd, EV_READ|EV_PERSIST, WebServer::onAccept, base);
     event_add(listen_ev, NULL);
     event_base_dispatch(base);
 }
@@ -191,7 +226,7 @@ void WebServer::setServerFd() {
 		std::cout << "socket listen failed, please try again" << std::endl;
 		exit(0);
 	}
-	setNonblock();
+	setNonblock(serverfd);
 }
 
 int main(int argc, char *argv[]) {

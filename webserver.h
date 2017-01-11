@@ -4,6 +4,11 @@
 
 #include <set>
 
+struct event_state{
+    struct event *read_ev;
+    struct event *write_ev;
+};
+
 class WebServer {
 private:
 	int serverfd;
@@ -19,12 +24,15 @@ private:
 	void setDeamon();
 	static void signalHandler(int);
 	void setWorkerProcess(int);
-	void setNonblock();
-    static void onAccept(int fd, short event, void *arg);
-    static void onRead(int fd, short event, void *arg);
 public:
 	WebServer();
 	void runAll();
+    static void onRead(int fd, short event, void *arg);
+    static void onWrite(int fd, short event, void *arg);
+    static struct event_state *allocateEventState(struct event_base *, int);
+    static void deleteEventState(struct event_state *);
+	static void setNonblock(int);
+    static void onAccept(int fd, short event, void *arg);
 	~WebServer();
 };
 
