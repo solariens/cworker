@@ -11,12 +11,20 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <sys/wait.h>
+#include <signal.h>
 #include "webserver.h"
 
-WebServer::WebServer() {
+pid_t WebServer::masterPid;
+std::set<pid_t> WebServer::pids;
+int WebServer::workerStatus;
+int (*WebServer::dataHandler)(char *) = NULL;
+
+WebServer::WebServer(char *ip, int p) {
 	masterPid = 0;
 	workerProcess = 4;
 	serverfd = 0;
+    addr = ip;
+    port = p;
 }
 
 WebServer::~WebServer() {
@@ -25,9 +33,9 @@ WebServer::~WebServer() {
 
 void WebServer::runAll() {
 	setServerFd();
-	//setDeamon();
+	setDeamon();
 	setMasterPid();
-	//setSignal();
+	setSignal();
 	forkWorker();
 	monitorWorker();
 }
@@ -69,7 +77,7 @@ void WebServer::setWorkerProcess(int processNum) {
 }
 
 void WebServer::forkWorker() {
-	for (int i=0; i<workerProcess; ++i) {
+    while (pids.size() < workerProcess) {
 		pid_t pid = fork();
 		if (pid < 0) {
 			std::cout << "fork process failed, please try again" << std::endl;
@@ -103,7 +111,7 @@ struct event_state *WebServer::allocateEventState(struct event_base *base, int f
     if (!state) {
         return NULL;
     }
-    state->read_ev = event_new(base, fd, EV_READ|EV_PERSIST, WebServer::onRead, state);
+    state->read_ev = event_new(base, fd, EV_READ, WebServer::onRead, state);
     if (!state->read_ev) {
         delete state;
         return NULL;
@@ -114,6 +122,8 @@ struct event_state *WebServer::allocateEventState(struct event_base *base, int f
         delete state;
         return NULL;
     }
+    memset(state->buffer, 0, sizeof(state->buffer));
+    state->cur_size = 0;
     return state;
 }
 
@@ -126,7 +136,19 @@ void WebServer::deleteEventState(struct event_state *state){
 
 void WebServer::onWrite(int fd, short event, void *arg) {
     struct event_state *state = (struct event_state *)arg;
-    send(fd, "hello world!", strlen("hello world!"), 0);
+    if (dataHandler) {
+        int res = dataHandler(state->buffer); 
+    }
+    int size = 0;
+    while (1) {
+        size = send(fd, state->buffer + size, strlen(state->buffer) - size, 0);
+        if (size <= 0) {
+            break;
+        }
+        if (size == strlen(state->buffer)) {
+            break;
+        }
+    }
     delete state;
     close(fd);
 }
@@ -134,22 +156,16 @@ void WebServer::onWrite(int fd, short event, void *arg) {
 void WebServer::onRead(int fd, short event, void *arg) {
     struct event_state * state = (struct event_state *)arg;
     int size = 0;
-    char buffer[65535];
-    memset(buffer, 0, sizeof(buffer));
-    int datasize = 0;
+    char *tmp = state->buffer;
     while (1) {
-        char *tmp = buffer;
-        size = recv(fd, tmp, 256, 0);
+        size = recv(fd, tmp, 1, 0);
         if (size <= 0) {
             break;
         }
-        datasize += size;
+        state->cur_size += size;
         tmp += size;
-        std::cout << datasize << std::endl;
-        if (buffer[datasize - 1] == ' ') {
-            std::cout << buffer << std::endl;
+        if (state->buffer[state->cur_size - 1] == '\n') {
             event_add(state->write_ev, NULL);
-            memset(buffer, 0, sizeof(buffer));
         }
     }
     return;
@@ -169,18 +185,20 @@ void WebServer::monitorWorker() {
 		}
 		int status;
 		pid_t pid = wait(&status);
-		status = WEXITSTATUS(status);
-		if (status == 100) {
+		if (pid > 0) {
 			std::set<int>::iterator it = pids.find(pid);
 			pids.erase(it);
 		}
+        if (workerStatus == WORKER_IS_RUNNING) {
+            forkWorker();            
+        }
 	}
 }
 
 void WebServer::signalHandler(int sigo) {
 	switch (sigo) {
 		case SIGINT:
-			std::cout << "sigint" << std::endl;
+            stopWorker();
 		break;
 		case SIGUSR1:
 			std::cout << "sigusr1" << std::endl;
@@ -191,8 +209,21 @@ void WebServer::signalHandler(int sigo) {
 	}
 }
 
+void WebServer::stopWorker() {
+    if (masterPid == getpid()) {
+        std::set<pid_t>::iterator it;
+        for (it=pids.begin(); it!=pids.end(); ++it) {
+            kill(*it, SIGKILL);
+            pids.erase(it);
+        }
+        kill(masterPid, SIGKILL);
+        workerStatus = WORKER_IS_SHUTDOWN;
+    }
+}
+
 void WebServer::setMasterPid() {
 	masterPid = getpid();
+    workerStatus = WORKER_IS_RUNNING;
 } 
 
 void WebServer::setServerFd() {
@@ -215,8 +246,8 @@ void WebServer::setServerFd() {
 	struct sockaddr_in server_addr;
 	memset(&server_addr, 0, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
-	server_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
-	server_addr.sin_port = htons(8888);
+	server_addr.sin_addr.s_addr = inet_addr(addr);
+	server_addr.sin_port = htons(port);
 	if (bind(serverfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
 		std::cout << "socket bid failed, please try again" << std::endl;
 		exit(0);
@@ -229,8 +260,16 @@ void WebServer::setServerFd() {
 	setNonblock(serverfd);
 }
 
+int echoData(char *data) {
+    std::cout << data << std::endl;
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
-	WebServer webserver;
+    char addr[] = "0.0.0.0";
+	WebServer webserver(addr, 8888);
+    webserver.setWorkerProcess(4);
+    WebServer::dataHandler = echoData;
 	webserver.runAll();
 	return 0;
 }
