@@ -1,4 +1,6 @@
 #include <iostream>
+#include <cstdio>
+#include <fstream>
 #include <string>
 #include <set>
 #include <cstring>
@@ -18,6 +20,7 @@ pid_t WebServer::masterPid;
 std::set<pid_t> WebServer::pids;
 int WebServer::workerStatus;
 int (*WebServer::dataHandler)(char *) = NULL;
+char WebServer::pidSavePath[128];
 
 WebServer::WebServer(char *ip, int p) {
 	masterPid = 0;
@@ -25,6 +28,7 @@ WebServer::WebServer(char *ip, int p) {
 	serverfd = 0;
     addr = ip;
     port = p;
+    sprintf(pidSavePath, "%s/%s", getcwd(NULL, 0), "server.pid");
 }
 
 WebServer::~WebServer() {
@@ -35,9 +39,25 @@ void WebServer::runAll() {
 	setServerFd();
 	setDeamon();
 	setMasterPid();
+    saveMasterPid2File();
 	setSignal();
 	forkWorker();
 	monitorWorker();
+}
+
+void WebServer::saveMasterPid2File() {
+    char buffer[10];
+    memset(buffer, 0, sizeof(buffer));
+    sprintf(buffer, "%d", masterPid);
+    std::ofstream file;
+    file.open(pidSavePath);
+    if (file.is_open()) {
+        file << buffer;
+        file.close();
+    } else {
+        std::cout << "open the server.pid file failed" << std::endl;
+        exit(0);
+    }
 }
 
 void WebServer::setDeamon() {
@@ -128,7 +148,6 @@ struct event_state *WebServer::allocateEventState(struct event_base *base, int f
 }
 
 void WebServer::deleteEventState(struct event_state *state){
-    event_del(state->read_ev);
     event_free(state->read_ev);
     event_free(state->write_ev);
     delete state;
@@ -151,6 +170,10 @@ void WebServer::onWrite(int fd, short event, void *arg) {
     }
     delete state;
     close(fd);
+}
+
+void WebServer::setDataHandler(int (*callback)(char *buffer)) {
+    dataHandler = callback;
 }
 
 void WebServer::onRead(int fd, short event, void *arg) {
@@ -211,13 +234,17 @@ void WebServer::signalHandler(int sigo) {
 
 void WebServer::stopWorker() {
     if (masterPid == getpid()) {
+        if (remove(pidSavePath) == -1) {
+            std::cout << "remove server.pid failed" << std::endl;
+            exit(0);
+        }
+        workerStatus = WORKER_IS_SHUTDOWN;
         std::set<pid_t>::iterator it;
         for (it=pids.begin(); it!=pids.end(); ++it) {
             kill(*it, SIGKILL);
             pids.erase(it);
         }
         kill(masterPid, SIGKILL);
-        workerStatus = WORKER_IS_SHUTDOWN;
     }
 }
 
@@ -269,7 +296,7 @@ int main(int argc, char *argv[]) {
     char addr[] = "0.0.0.0";
 	WebServer webserver(addr, 8888);
     webserver.setWorkerProcess(4);
-    WebServer::dataHandler = echoData;
+    webserver.setDataHandler(echoData);
 	webserver.runAll();
 	return 0;
 }
