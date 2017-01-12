@@ -32,7 +32,7 @@ WebServer::WebServer(char *ip, int p) {
 }
 
 WebServer::~WebServer() {
-	
+    std::cout << getpid() << " killed" << std::endl;	
 }
 
 void WebServer::runAll() {
@@ -157,8 +157,17 @@ void WebServer::onWrite(int fd, short event, void *arg) {
     struct event_state *state = (struct event_state *)arg;
     if (dataHandler) {
         int res = dataHandler(state->buffer); 
+        if (res == 0) {
+            char buffer[1024];
+            memset(buffer, 0, sizeof(buffer));
+            const char *strStatusCode = "Status Code: 200 OK\n";
+            const char *content = "\nI am get it\n";
+            strcpy(buffer, strStatusCode);
+            strcpy(buffer+strlen(strStatusCode), content);
+            send(fd, buffer, strlen(buffer), 0);
+        }
     }
-    int size = 0;
+    /*int size = 0;
     while (1) {
         size = send(fd, state->buffer + size, strlen(state->buffer) - size, 0);
         if (size <= 0) {
@@ -167,7 +176,7 @@ void WebServer::onWrite(int fd, short event, void *arg) {
         if (size == strlen(state->buffer)) {
             break;
         }
-    }
+    }*/
     delete state;
     close(fd);
 }
