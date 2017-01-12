@@ -16,15 +16,15 @@ struct event_state{
 
 class WebServer {
 private:
-    static char pidSavePath[128];
 	int serverfd;
-	static std::set<pid_t> pids;
 	int workerProcess;
     const char *addr;
     int port;
 	static pid_t masterPid;
     static int workerStatus;
-    static int (*dataHandler)(char *buffer);
+    static char * (*dataHandler)(void *buffer);
+    static char pidSavePath[128];
+	static std::set<pid_t> pids;
 	void monitorWorker();
 	void setMasterPid();
 	void forkWorker();
@@ -44,7 +44,7 @@ private:
 public:
 	WebServer(char *, int);
 	void setWorkerProcess(int);
-    void setDataHandler(int (*callback)(char *));
+    void setDataHandler(char *(*callback)(void *));
 	void runAll();
 	~WebServer();
 };

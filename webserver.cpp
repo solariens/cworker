@@ -19,7 +19,7 @@
 pid_t WebServer::masterPid;
 std::set<pid_t> WebServer::pids;
 int WebServer::workerStatus;
-int (*WebServer::dataHandler)(char *) = NULL;
+char * (*WebServer::dataHandler)(void *) = NULL;
 char WebServer::pidSavePath[128];
 
 WebServer::WebServer(char *ip, int p) {
@@ -70,6 +70,9 @@ void WebServer::setDeamon() {
 	} else {
 		chdir("/");
 		umask(0);
+        fclose(stdin);
+        fclose(stdout);
+        fclose(stderr);
 	}
 }
 
@@ -156,32 +159,23 @@ void WebServer::deleteEventState(struct event_state *state){
 void WebServer::onWrite(int fd, short event, void *arg) {
     struct event_state *state = (struct event_state *)arg;
     if (dataHandler) {
-        int res = dataHandler(state->buffer); 
-        if (res == 0) {
-            char buffer[1024];
-            memset(buffer, 0, sizeof(buffer));
-            const char *strStatusCode = "Status Code: 200 OK\n";
-            const char *content = "\nI am get it\n";
-            strcpy(buffer, strStatusCode);
-            strcpy(buffer+strlen(strStatusCode), content);
-            send(fd, buffer, strlen(buffer), 0);
+        char *res = dataHandler(state->buffer); 
+        if (res != NULL) {
+            int len = strlen(res);
+            while (1) {
+                int size = send(fd, res, 1, 0); 
+                if (size <= 0) {
+                    break;
+                }
+                res += size;
+            }
         }
     }
-    /*int size = 0;
-    while (1) {
-        size = send(fd, state->buffer + size, strlen(state->buffer) - size, 0);
-        if (size <= 0) {
-            break;
-        }
-        if (size == strlen(state->buffer)) {
-            break;
-        }
-    }*/
     delete state;
     close(fd);
 }
 
-void WebServer::setDataHandler(int (*callback)(char *buffer)) {
+void WebServer::setDataHandler(char *(*callback)(void *buffer)) {
     dataHandler = callback;
 }
 
@@ -296,9 +290,10 @@ void WebServer::setServerFd() {
 	setNonblock(serverfd);
 }
 
-int echoData(char *data) {
-    std::cout << data << std::endl;
-    return 0;
+char *echoData(void *data) {
+    char *str = (char *)data;
+    std::cout << str << std::endl;
+    return str;
 }
 
 int main(int argc, char *argv[]) {
