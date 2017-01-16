@@ -16,4 +16,4 @@
     设置server开启的进程数，同nginx的worker process
     webserver.setWorkerProcess(int workerprocess);
     指定回调函数处理数据，可以在回调函数自定义应用层协议
-    webserver.setDataHandler(char *(*dataH))
+    webserver.setDataHandler(char *(*dataHandler)(void *data))
