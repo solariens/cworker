@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <unistd.h>
+#include <time.h>
 #include <event2/event.h>
 #include <netinet/tcp.h>
 #include <fcntl.h>
@@ -21,6 +22,7 @@ std::set<pid_t> WebServer::pids;
 int WebServer::workerStatus;
 char * (*WebServer::dataHandler)(void *) = NULL;
 char WebServer::pidSavePath[128];
+char WebServer::logFile[128];
 
 WebServer::WebServer(char *ip, int p) {
 	masterPid = 0;
@@ -28,14 +30,14 @@ WebServer::WebServer(char *ip, int p) {
 	serverfd = 0;
     addr = ip;
     port = p;
-    sprintf(pidSavePath, "%s/%s", getcwd(NULL, 0), "server.pid");
 }
 
 WebServer::~WebServer() {
-    std::cout << getpid() << " killed" << std::endl;	
+
 }
 
 void WebServer::runAll() {
+    init();
 	setServerFd();
 	setDeamon();
 	setMasterPid();
@@ -43,6 +45,35 @@ void WebServer::runAll() {
 	setSignal();
 	forkWorker();
 	monitorWorker();
+}
+
+void WebServer::init() {
+    memset(pidSavePath, 0, sizeof(pidSavePath));
+    sprintf(pidSavePath, "%s/%s", getcwd(NULL, 0), "cworker.pid");
+
+    memset(logFile, 0, sizeof(logFile));
+    sprintf(logFile, "%s/%s", getcwd(NULL, 0), "cworker.log");
+}
+
+void WebServer::log(const char *msg) {
+    std::ofstream file;
+    file.open(logFile);
+    if (file.is_open()) {
+        time_t timestamp;
+        time(&timestamp);
+        struct tm *time = localtime(&timestamp);
+        char date[128];
+        memset(date, 0, sizeof(date));
+        int year = time->tm_year - 1990;
+        int month = time->tm_mon;
+        int day = time->tm_mday;
+        int hour = time->tm_hour;
+        int minute = time->tm_min;
+        int sec = time->tm_sec;
+        sprintf(date, "%d-%d-%d %d:%d:%d", year, month, day, hour, minute, sec);
+        file << "[date]" << date << "[pid]" << getpid() << msg << std::endl;
+        file.close();
+    }
 }
 
 void WebServer::saveMasterPid2File() {
@@ -55,7 +86,8 @@ void WebServer::saveMasterPid2File() {
         file << buffer;
         file.close();
     } else {
-        std::cout << "open the server.pid file failed" << std::endl;
+        const char *msg = "open the server.pid file failed";
+        log(msg);
         exit(0);
     }
 }
@@ -78,13 +110,16 @@ void WebServer::setDeamon() {
 
 void WebServer::setNonblock(int fd) {
 	int flags;
+    const char *msg;
 	if ((flags = fcntl(fd, F_GETFL)) == -1) {
-		std::cout << "get serverfd flags failed" << std::endl;
+        msg = "get server fd flags failed";
+        log(msg);
 		exit(0);
 	}
 	flags |= O_NONBLOCK;
 	if (fcntl(fd, F_SETFL, flags) == -1) {
-		std::cout << "set serverfd flags failed" << std::endl;
+        msg = "set server fd flags failed";
+        log(msg);
 		exit(0);
 	}	
 }
@@ -93,6 +128,7 @@ void WebServer::setSignal() {
 	signal(SIGINT, WebServer::signalHandler);
 	signal(SIGUSR1, WebServer::signalHandler);
 	signal(SIGUSR2, WebServer::signalHandler);
+    signal(SIGPIPE, WebServer::signalHandler);
 }
 
 void WebServer::setWorkerProcess(int processNum) {
@@ -103,7 +139,8 @@ void WebServer::forkWorker() {
     while (pids.size() < workerProcess) {
 		pid_t pid = fork();
 		if (pid < 0) {
-			std::cout << "fork process failed, please try again" << std::endl;
+            const char *msg = "fork process failed, please try again";
+            log(msg);
 			exit(0);
 		} else if (pid > 0) {
 			pids.insert(pid);
@@ -121,7 +158,8 @@ void WebServer::onAccept(int fd, short event, void *arg) {
     socklen_t len = sizeof(clientaddr);
     int clientfd = accept(fd, (struct sockaddr *)&clientaddr, &len);
     if (clientfd < 0) {
-        std::cout << "accept failed" << std::endl;
+        const char *msg = "accept failed";
+        log(msg);
         return;
     }
     setNonblock(clientfd);
@@ -227,18 +265,21 @@ void WebServer::signalHandler(int sigo) {
             stopWorker();
 		break;
 		case SIGUSR1:
-			std::cout << "sigusr1" << std::endl;
+			//std::cout << "sigusr1" << std::endl;
 		break;
 		case SIGUSR2:
-			std::cout << "sigusr2" << std::endl;
+			//std::cout << "sigusr2" << std::endl;
 		break;
+        case SIGPIPE:
+        break;
 	}
 }
 
 void WebServer::stopWorker() {
     if (masterPid == getpid()) {
         if (remove(pidSavePath) == -1) {
-            std::cout << "remove server.pid failed" << std::endl;
+            const char *msg = "remove server.pid failed";
+            log(msg);
             exit(0);
         }
         workerStatus = WORKER_IS_SHUTDOWN;
@@ -257,19 +298,23 @@ void WebServer::setMasterPid() {
 } 
 
 void WebServer::setServerFd() {
+    const char *msg;
 	serverfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (serverfd == -1) {
-		std::cout << "socket create failed, please try again" << std::endl;
+        msg = "socket create failed";
+        log(msg);
 		exit(0);
 	}
 	int flag = 1;
 	if (setsockopt(serverfd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(int)) == -1) {
-		std::cout << "socket option set failed" << std::endl;
+        msg = "socket open set SO_REUSEADDR failed";
+        log(msg);
 		exit(0);
 	}
 	
 	if (setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int)) == -1) {
-		std::cout << "socket set tcp nodelay failed" << std::endl;
+        msg = "socket set tcp nodelay failed";
+        log(msg);
 		exit(0);
 	}
 
@@ -279,12 +324,14 @@ void WebServer::setServerFd() {
 	server_addr.sin_addr.s_addr = inet_addr(addr);
 	server_addr.sin_port = htons(port);
 	if (bind(serverfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
-		std::cout << "socket bid failed, please try again" << std::endl;
+        msg = "socket bind failed";
+        log(msg);
 		exit(0);
 	}
 
-	if (listen(serverfd, 512) == -1) {
-		std::cout << "socket listen failed, please try again" << std::endl;
+	if (listen(serverfd, MAX_CONN_BACKLOG) == -1) {
+        msg = "socket listen failed";
+        log(msg);
 		exit(0);
 	}
 	setNonblock(serverfd);

@@ -6,6 +6,7 @@
 
 #define WORKER_IS_RUNNING 1
 #define WORKER_IS_SHUTDOWN 0
+#define MAX_CONN_BACKLOG 512
 
 struct event_state{
     char buffer[65535];
@@ -25,7 +26,9 @@ private:
     static char * (*dataHandler)(void *buffer);
     static char pidSavePath[128];
 	static std::set<pid_t> pids;
+    static char logFile[128];
 	void monitorWorker();
+    void init();
 	void setMasterPid();
 	void forkWorker();
 	void runWorker();
@@ -33,6 +36,7 @@ private:
 	void setSignal();
 	void setDeamon();
     void saveMasterPid2File();
+    static void log(const char *);
     static void stopWorker();
 	static void signalHandler(int);
     static void onRead(int fd, short event, void *arg);
