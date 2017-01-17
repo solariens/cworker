@@ -16,7 +16,10 @@ WebServer webserver(const char *addr, int port);
 设置server开启的进程数，同nginx的worker process  
 webserver.setWorkerProcess(int workerprocess);  
 指定回调函数处理数据，可以在回调函数自定义应用层协议  
-webserver.setDataHandler(char *(*dataHandler)(void *data))  
+webserver.setDataHandler(char *(*dataHandler)(void *data))  
+程序运行时会在生成server.pid文件，用来保存父进程PID，根据此PID我们可以杀掉该进程与其子进程  
+关闭程序  
+  kill -s SIGINT `cat server.pid`
 ### 例子  
 接收客户端发过来的数据，原样返回  
 ``` c++
