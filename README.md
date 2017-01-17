@@ -17,7 +17,8 @@ WebServer webserver(const char *addr, int port);
 webserver.setWorkerProcess(int workerprocess);  
 指定回调函数处理数据，可以在回调函数自定义应用层协议  
 webserver.setDataHandler(char *(*dataHandler)(void *data))  
-### 例子
+### 例子  
+接收客户端发过来的数据，原样返回  
 ``` c++
 #include <iostream>
 #include <string>
