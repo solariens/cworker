@@ -46,7 +46,7 @@ private:
 	static void setNonblock(int);
     static void onAccept(int fd, short event, void *arg);
 public:
-	WebServer(char *, int);
+	WebServer(const char *, int);
 	void setWorkerProcess(int);
     void setDataHandler(char *(*callback)(void *));
 	void runAll();

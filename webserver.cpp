@@ -24,7 +24,7 @@ char * (*WebServer::dataHandler)(void *) = NULL;
 char WebServer::pidSavePath[128];
 char WebServer::logFile[128];
 
-WebServer::WebServer(char *ip, int p) {
+WebServer::WebServer(const char *ip, int p) {
 	masterPid = 0;
 	workerProcess = 4;
 	serverfd = 0;
@@ -337,17 +337,3 @@ void WebServer::setServerFd() {
 	setNonblock(serverfd);
 }
 
-char *echoData(void *data) {
-    char *str = (char *)data;
-    std::cout << str << std::endl;
-    return str;
-}
-
-int main(int argc, char *argv[]) {
-    char addr[] = "0.0.0.0";
-	WebServer webserver(addr, 8888);
-    webserver.setWorkerProcess(4);
-    webserver.setDataHandler(echoData);
-	webserver.runAll();
-	return 0;
-}
