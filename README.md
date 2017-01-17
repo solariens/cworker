@@ -19,7 +19,7 @@ webserver.setWorkerProcess(int workerprocess);
 webserver.setDataHandler(char *(*dataHandler)(void *data))  
 程序运行时会在生成server.pid文件，用来保存父进程PID，根据此PID我们可以杀掉该进程与其子进程  
 关闭程序  
-  kill -s SIGINT `cat server.pid`
+    kill -s SIGINT `cat server.pid`
 ### 例子  
 接收客户端发过来的数据，原样返回  
 ``` c++
