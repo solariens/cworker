@@ -17,3 +17,23 @@ WebServer webserver(const char *addr, int port);
 webserver.setWorkerProcess(int workerprocess);  
 指定回调函数处理数据，可以在回调函数自定义应用层协议  
 webserver.setDataHandler(char *(*dataHandler)(void *data))  
+```
+#include <iostream>
+#include <string>
+#include "webserver.h"
+
+char *echoData(void *data) {
+  char *str = (char *)data;
+  return str;
+}
+
+int main(int argc, char *argv[]) {
+  const char *ip = "0.0.0.0";
+  int port = 8888;
+  WebServer webserver(ip, port);
+  webserver.setWorkerProcess(8);
+  webserver.setDataHandler(echoData);
+  webserver.runAll();
+  return 0;
+}
+```
